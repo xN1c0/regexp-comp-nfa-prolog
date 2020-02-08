@@ -64,68 +64,77 @@ nfa_regexp_comp(FA_Id, RE) :-
     is_regexp(RE),
     RE =.. Rs,
     nfa_regexp_comp_helper(FA_Id, Rs, Start, Final),
-    assert(nfa_start(Fa_Id, Start)),
-    assert(nfa_final(Fa_Id, Final)),
+    assert(nfa_start(FA_Id, Start)),
+    assert(nfa_final(FA_Id, Final)),
     !.
 
-nfa_regexp_comp_helper(FA_Id, [Rs], Start, Final) :-
+nfa_regexp_comp_helper(FA_Id, Rs, Start, Final) :-
     atomic(Rs),
     gensym(q_, Start),
     gensym(q_, Final),
-    assert(nfa_delta(Fa_Id, Rs, Start, Final)),
+    assert(nfa_delta(FA_Id, Rs, Start, Final)),
     !.
 
 /*
 STAR
 */
-nfa_regexp_comp_helper(Fa_Id, ['*'|Rs], Start, Final) :-
+nfa_regexp_comp_helper(FA_Id, ['*'|Rs], Start, Final) :-
     gensym(q_, Start),
     gensym(q_, Final),
-    nfa_regexp_comp_helper(Fa_Id, Rs, S, F),
-    assert(nfa_delta(Fa_Id, epsilon, Start, Final)),
-    assert(nfa_delta(Fa_Id, epsilon, Start, S)),
-    assert(nfa_delta(Fa_Id, epsilon, F, Final)),
-    assert(nfa_delta(Fa_Id, epsilon, F, S)),
+    Rs =.. Rx,
+    nfa_regexp_comp_helper(FA_Id, Rx, S, F),
+    assert(nfa_delta(FA_Id, epsilon, Start, Final)),
+    assert(nfa_delta(FA_Id, epsilon, Start, S)),
+    assert(nfa_delta(FA_Id, epsilon, F, Final)),
+    assert(nfa_delta(FA_Id, epsilon, F, S)),
     !.
 
 /*
 PLUS
 */
-nfa_regexp_comp_helper(Fa_Id, ['+'|Rs], Start, Final) :-
-    nfa_regexp_comp_helper(Fa_Id, [Rs,*(Rs)]),
+nfa_regexp_comp_helper(FA_Id, ['+'|Rs], Start, Final) :-
+    Rs =.. Rx,
+    nfa_regexp_comp_helper(FA_Id, [Rs,*(Rs)]),
     !.
 
 /*
 SEQUENCE
 */
-nfa_regexp_comp_helper(Fa_Id, ['[|]'|Rs], Start, Final) :-
-    nfa_regexp_comp_helper_sequence(Fa_Id, Rs, Start, Final),
+nfa_regexp_comp_helper(FA_Id, ['[|]'|Rs], Start, Final) :-
+    gensym(q_, Start),
+    nfa_regexp_comp_helper_sequence(FA_Id, Rs, Start, Final),
     !.
 
-nfa_regexp_comp_helper_sequence(Fa_Id, [], Final, Final).
+nfa_regexp_comp_helper_sequence(FA_Id, [], Final, Final).
 
-nfa_regexp_comp_helper_sequence(Fa_Id, [First|Others], Start, Final) :-
-    nfa_regexp_comp_helper(Fa_Id, First, S, F),
-    assert(nfa_delta(Fa_Id, epsilon, Start, S)),
-    nfa_regexp_comp_helper_sequence(Fa_Id, Others, F, Final),
+nfa_regexp_comp_helper_sequence(FA_Id, [First|[]], Start, Final) :-
+    nfa_regexp_comp_helper(FA_Id, First, S, F),
+    assert(nfa_delta(FA_Id, epsilon, Start, S)),
+    nfa_regexp_comp_helper_sequence(FA_Id, Others, F, Final),
+    !.
+
+nfa_regexp_comp_helper_sequence(FA_Id, [First|[Others]], Start, Final) :-
+    nfa_regexp_comp_helper(FA_Id, First, S, F),
+    assert(nfa_delta(FA_Id, epsilon, Start, S)),
+    nfa_regexp_comp_helper_sequence(FA_Id, Others, F, Final),
     !.
 
 /*
 OR
 */
-nfa_regexp_comp_helper(Fa_Id, ['/'|Rs], Start, Final) :-
+nfa_regexp_comp_helper(FA_Id, ['/'|Rs], Start, Final) :-
     gensym(q_, Start),
-    gensym(q_,Final),
-    nfa_regexp_comp_helper_or(Fa_Id, Rs, S, F),
+    gensym(q_, Final),
+    nfa_regexp_comp_helper_or(FA_Id, Rs, Start, Final),
     !.
 
-nfa_regexp_comp_helper_or(Fa_Id, [], Final, Final).
+nfa_regexp_comp_helper_or(FA_Id, [], _, _).
 
-nfa_regexp_comp_helper_or(Fa_Id, [First|Others], Start, Final) :-
-    nfa_regexp_comp_helper(Fa_Id, First, S, F),
-    assert(nfa_delta(Fa_Id, epsilon, Start, S)),
-    assert(nfa_delta(Fa_Id, epsilon, F, Final)),
-    nfa_regexp_comp_helper_or(Fa_Id, Others, Start, Final),
+nfa_regexp_comp_helper_or(FA_Id, [First|Others], Start, Final) :-
+    nfa_regexp_comp_helper(FA_Id, First, S, F),
+    assert(nfa_delta(FA_Id, epsilon, Start, S)),
+    assert(nfa_delta(FA_Id, epsilon, F, Final)),
+    nfa_regexp_comp_helper_or(FA_Id, Others, Start, Final),
     !.
 
 
@@ -134,42 +143,37 @@ nfa_regexp_comp_helper_or(Fa_Id, [First|Others], Start, Final) :-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-nfa_rec(Fa_Id, Input) :-
-    nfa_start(Fa_Id, Start),
-    nfa_rec(Fa_Id, Input, Start, Final),
+nfa_rec(FA_Id, Input) :-
+    nfa_start(FA_Id, Start),
+    nfa_rec(FA_Id, Input, Start, Final),
     !,
-    nfa_final(Fa_Id, Final).
+    nfa_final(FA_Id, Final).
 
-nfa_rec(Fa_Id, [], Final, Final) :-
+nfa_rec(FA_Id, [], Final, Final) :-
+    nfa_final(FA_Id, Final).
+
+nfa_rec(FA_Id, [], Start, Final) :-
+    nfa_delta(FA_Id, epsilon, Start, Final),
     !.
 
-nfa_rec(Fa_Id, [First|Others], Start, Final) :-
-    nfa_delta(Fa_Id, First, Start, X),
-    nfa_rec(Fa_Id, Others, X, Final),
+nfa_rec(FA_Id, [First|Others], Start, Final) :-
+    nfa_delta(FA_Id, First, Start, X),
+    nfa_rec(FA_Id, Others, X, Final),
     !.
 
-nfa_rec(Fa_Id, Input, Start, Final) :-
-    nfa_delta(Fa_Id, epsilon, Start, X),
-    nfa_rec(Fa_Id, Input, X, Final),
+nfa_rec(FA_Id, Input, Start, Final) :-
+    nfa_delta(FA_Id, epsilon, Start, X),
+    nfa_rec(FA_Id, Input, X, Final),
     !.
 
+%%%%%%%%%%%%%%%%%%%%%
 
+nfa_clear() :-
+    retractall(nfa_delta(_, _, _, _)),
+    retractall(nfa_start(_, _)),
+    retractall(nfa_final(_, _)).
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+nfa_clear(FA_Id) :-
+    retractall(nfa_delta(FA_Id, _, _, _)),
+    retractall(nfa_start(FA_Id, _)),
+    retractall(nfa_final(FA_Id, _)).
